@@ -35,8 +35,8 @@ class TicketResponse(BaseModel):
 async def lifespan(app: FastAPI):
     # Startup
     print("Starting IT Support Chatbot...")
-    create_tables()
-    print("Database tables created successfully!")
+    # Tables are created by setup_database.py script
+    print("Database ready!")
     
     yield
     

@@ -1,0 +1,25 @@
+models:
+  - type: main
+    engine: google_generativeai
+    model: gemini-1.5-pro
+    parameters:
+      api_key: ${GOOGLE_API_KEY}
+
+instructions:
+  - type: general
+    content: |
+      You are an IT support chatbot. Only respond to IT-related queries (e.g., laptop issues, Wi-Fi problems). Do not respond to off-topic queries like weather, politics, or personal matters. Avoid sharing or requesting sensitive information like credit card numbers or SSNs.
+
+rails:
+  input:
+    flows:
+      - check_profanity
+      - check_toxicity
+      - check_pii
+      - check_it_specific
+      - check_off_topic
+  output:
+    flows:
+      - check_profanity
+      - check_toxicity
+      - check_pii

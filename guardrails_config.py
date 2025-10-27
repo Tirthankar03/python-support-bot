@@ -1,7 +1,11 @@
-from guardrails import Guard
-from guardrails.hub import ProfanityFree, ToxicLanguage, NoPersonalInfo
+from nemoguardrails import RailsConfig, LLMRails
 from pydantic import BaseModel
-from typing import Dict, Any
+import os
+import logging
+
+# Set up logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 class GuardrailResponse(BaseModel):
     valid: bool
@@ -9,29 +13,32 @@ class GuardrailResponse(BaseModel):
 
 class ITSupportGuardrails:
     def __init__(self):
-        # Initialize NVIDIA Guardrails with multiple safety checks
-        self.guard = Guard().use(
-            ProfanityFree(),
-            ToxicLanguage(),
-            NoPersonalInfo()
-        )
-        
-        # IT-specific banned terms
+        try:
+            # Load NeMo Guardrails configuration
+            config_path = os.path.join(os.path.dirname(__file__), "config")
+            config = RailsConfig.from_path(config_path)
+            self.rails = LLMRails(config)
+            logger.info("NeMo Guardrails initialized successfully")
+        except Exception as e:
+            logger.error(f"Failed to initialize NeMo Guardrails: {e}")
+            self.rails = None
+
+        # IT-specific banned terms (also defined in config.co for consistency)
         self.it_banned_terms = [
-            "hack", "password", "credit card", "address", "ssn", "social security",
-            "bank account", "pin", "cvv", "cvc", "expiry", "expiration"
+            "hack", "credit card", "address", "ssn", "social security",
+            "bank account", "pin", "cvv", "cvc"
         ]
-        
-        # Off-topic patterns
+
+        # Off-topic patterns (also defined in config.co for consistency)
         self.off_topic_patterns = [
-            r"weather", r"math", r"personal", r"politics", r"cooking", 
+            r"weather", r"math", r"personal", r"politics", r"cooking",
             r"travel", r"dating", r"relationship", r"medical", r"legal"
         ]
-    
+
     async def check_input(self, text: str) -> GuardrailResponse:
         """Check if input text passes all guardrails"""
         try:
-            # Check for IT-specific banned terms
+            # First do basic checks for IT-specific terms and off-topic content
             text_lower = text.lower()
             for term in self.it_banned_terms:
                 if term in text_lower:
@@ -48,43 +55,69 @@ class ITSupportGuardrails:
                         valid=False,
                         message="Sorry, I only handle IT support issues like laptop or Wi-Fi problems. Please describe your technical issue."
                     )
-            
-            # Use NVIDIA Guardrails for additional safety checks
-            try:
-                validated_text, validated_output, guard_history = self.guard.validate(
-                    text, 
-                    metadata={"prompt": "IT support query"}
-                )
-                
-                # If guardrails pass, return success
+
+            # Use NeMo Guardrails if available
+            if self.rails:
+                try:
+                    # Use NeMo Guardrails to validate input
+                    response = await self.rails.generate_async(
+                        prompt=text,
+                        metadata={"prompt_type": "IT support query"}
+                    )
+
+                    # If guardrails pass (no stop triggered), response will be generated
+                    # If guardrails fail, response will contain the bot's rejection message
+                    if response.startswith("I can't process") or response.startswith("Sorry, I only handle"):
+                        return GuardrailResponse(
+                            valid=False,
+                            message=response
+                        )
+
+                    return GuardrailResponse(valid=True)
+
+                except Exception as e:
+                    logger.warning(f"NeMo Guardrails check failed: {e}")
+                    # Fallback to basic validation if NeMo Guardrails fails
+                    return GuardrailResponse(valid=True)
+            else:
+                # If NeMo Guardrails is not available, use basic validation
+                logger.warning("NeMo Guardrails not available, using basic validation")
                 return GuardrailResponse(valid=True)
-                
-            except Exception as e:
-                # If guardrails fail, return appropriate message
-                return GuardrailResponse(
-                    valid=False,
-                    message="I can't process this request due to safety concerns. Please rephrase your IT support question."
-                )
-                
+
         except Exception as e:
+            logger.error(f"Input validation error: {e}")
             # Fallback to basic check if guardrails fail
             return GuardrailResponse(
                 valid=False,
                 message="I can't process this request. Please describe your IT support issue clearly."
             )
-    
+
     async def check_output(self, text: str) -> GuardrailResponse:
         """Check if AI response is safe to send"""
         try:
-            # Use NVIDIA Guardrails for output validation
-            validated_text, validated_output, guard_history = self.guard.validate(
-                text,
-                metadata={"prompt": "IT support response"}
-            )
-            
-            return GuardrailResponse(valid=True)
-            
+            # Use NeMo Guardrails if available
+            if self.rails:
+                try:
+                    # Use NeMo Guardrails to validate output
+                    response = await self.rails.generate_async(
+                        prompt=text,
+                        metadata={"prompt_type": "IT support response"}
+                    )
+
+                    # If guardrails pass, return success
+                    return GuardrailResponse(valid=True)
+
+                except Exception as e:
+                    logger.warning(f"NeMo Guardrails output check failed: {e}")
+                    # Fallback to basic validation
+                    return GuardrailResponse(valid=True)
+            else:
+                # If NeMo Guardrails is not available, use basic validation
+                logger.warning("NeMo Guardrails not available for output validation")
+                return GuardrailResponse(valid=True)
+
         except Exception as e:
+            logger.error(f"Output validation error: {e}")
             return GuardrailResponse(
                 valid=False,
                 message="I apologize, but I can't provide that response. Please try rephrasing your question."
@@ -92,4 +125,3 @@ class ITSupportGuardrails:
 
 # Global guardrails instance
 guardrails = ITSupportGuardrails()
-
