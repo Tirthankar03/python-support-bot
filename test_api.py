@@ -47,8 +47,7 @@ def test_support_endpoint():
         payload = {
             "query": test_case["query"],
             "chatId": TEST_CHAT_ID,
-            "name": TEST_NAME,
-            "history": []
+            "name": TEST_NAME
         }
         
         try:

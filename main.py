@@ -18,7 +18,6 @@ class SupportRequest(BaseModel):
     query: str
     chatId: str
     name: str
-    history: Optional[List[Dict[str, Any]]] = []
 
 class SupportResponse(BaseModel):
     response: str

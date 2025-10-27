@@ -1,13 +1,13 @@
 # IT Support Chatbot
 
-A simple AI-powered IT support chatbot built with FastAPI, featuring long-term memory, ticket management, and NVIDIA Guardrails for safety.
+A simple AI-powered IT support chatbot built with FastAPI, featuring long-term memory, ticket management, and a lightweight internal guardrails implementation for safety (no external guardrails library required).
 
 ## Features
 
 - **AI-Powered Support**: Uses Google Gemini 1.5 Flash for intelligent IT support responses
 - **Long-term Memory**: Redis-based conversation history for personalized interactions
 - **Ticket Management**: Automatic ticket creation and tracking via PostgreSQL (NeonDB)
-- **Safety Guardrails**: NVIDIA Guardrails integration for content safety and IT-specific filtering
+-- **Safety Guardrails**: Lightweight internal guardrails for content safety and IT-specific filtering (no external library required)
 - **Function Calling**: AI can create tickets, retrieve past tickets, and get current date
 - **REST API**: Clean FastAPI endpoints for easy integration
 
@@ -17,7 +17,7 @@ A simple AI-powered IT support chatbot built with FastAPI, featuring long-term m
 - **AI Model**: Google Gemini 1.5 Flash
 - **Database**: PostgreSQL (NeonDB)
 - **Cache**: Redis (Upstash)
-- **Safety**: NVIDIA Guardrails
+-- **Safety**: Lightweight internal guardrails (no external library required)
 
 ## Setup
 
@@ -65,7 +65,6 @@ Main endpoint for processing IT support queries.
   "query": "My laptop won't turn on",
   "chatId": "user123",
   "name": "John Doe",
-  "history": []
 }
 ```
 
@@ -85,6 +84,43 @@ Get conversation history for a user.
 ### DELETE `/history/{chat_id}`
 Clear conversation history for a user.
 
+## Making API Requests
+
+You can test the API endpoints using curl commands:
+
+### 1. Health Check
+```bash
+curl http://localhost:8000/health
+```
+
+### 2. Submit Support Query
+```bash
+curl -X POST http://localhost:8000/support \
+  -H "Content-Type: application/json" \
+  -d '{
+    "query": "My laptop won'\''t turn on",
+    "chatId": "user123",
+    "name": "John Doe",
+  }'
+```
+
+### 3. Get User's Tickets
+```bash
+curl http://localhost:8000/tickets/user123
+```
+
+### 4. Get Conversation History
+```bash
+curl http://localhost:8000/history/user123
+```
+
+### 5. Clear Conversation History
+```bash
+curl -X DELETE http://localhost:8000/history/user123
+```
+
+Note: Replace `user123` with your actual chatId when making requests.
+
 ## Testing
 
 Use the included test script to verify the API works correctly:
@@ -97,7 +133,7 @@ This will test all endpoints and verify the AI responses are working properly.
 
 ## Safety Features
 
-- **NVIDIA Guardrails**: Advanced content safety and filtering
+- **Internal Guardrails**: Lightweight checks for content safety and filtering (designed for assignment use; not a replacement for production guardrail libraries)
 - **IT-Specific Filtering**: Blocks non-IT related queries
 - **Sensitive Data Protection**: Prevents processing of passwords, credit cards, etc.
 - **Harmful Action Prevention**: Blocks suggestions for unsafe actions
@@ -126,7 +162,7 @@ The application is structured as follows:
 - `ai_agent.py`: AI agent with function calling capabilities
 - `database.py`: Database models and connection
 - `redis_client.py`: Redis client for conversation history
-- `guardrails_config.py`: NVIDIA Guardrails configuration
+ - `guardrails_config.py`: Lightweight internal guardrails configuration
 - `config.py`: Application configuration
 - `setup_database.py`: Database schema setup script
 - `run.py`: Application startup script
