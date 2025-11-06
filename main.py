@@ -1,4 +1,4 @@
-from fastapi import FastAPI, HTTPException, Depends
+from fastapi import FastAPI, HTTPException, Depends, Request
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import List, Dict, Any, Optional
@@ -11,7 +11,12 @@ from database import create_tables, get_db, User, Ticket
 from redis_client import redis_client
 from ai_agent import ai_agent
 from guardrails_config import guardrails
-# WhatsApp bot removed - keeping only FastAPI
+from whatsapp_utils import (
+    signature_required_dependency,
+    process_whatsapp_message,
+    is_valid_whatsapp_message,
+    verify_webhook_token
+)
 
 # Pydantic models
 class SupportRequest(BaseModel):
@@ -165,6 +170,77 @@ async def clear_conversation_history(chat_id: str):
     except Exception as e:
         print(f"Error clearing history: {e}")
         raise HTTPException(status_code=500, detail="Internal server error")
+
+
+# WhatsApp Webhook Endpoints
+@app.get("/webhook")
+async def webhook_verify(
+    hub_mode: str = None,
+    hub_verify_token: str = None,
+    hub_challenge: str = None
+):
+    """
+    WhatsApp webhook verification endpoint.
+    This endpoint is called by WhatsApp to verify the webhook URL.
+    """
+    return verify_webhook_token(hub_mode, hub_verify_token, hub_challenge)
+
+
+@app.post("/webhook")
+async def webhook_message(
+    request: Request,
+    db: Session = Depends(get_db)
+):
+    """
+    WhatsApp webhook endpoint for receiving messages.
+    This endpoint receives incoming WhatsApp messages and processes them.
+    """
+    try:
+        # Validate signature first
+        signature = request.headers.get("X-Hub-Signature-256", "")[7:]  # Removing 'sha256='
+        body_bytes = await request.body()
+        payload = body_bytes.decode("utf-8")
+
+        if not signature or not payload:
+            raise HTTPException(status_code=400, detail="Missing signature or payload")
+
+        # Validate signature
+        from whatsapp_utils import validate_signature
+        if not validate_signature(payload, signature):
+            print("Signature verification failed!")
+            raise HTTPException(status_code=403, detail="Invalid signature")
+
+        # Parse JSON body
+        import json
+        body = json.loads(payload)
+        print(f"request body: {body}")
+
+        # Check if it's a WhatsApp status update
+        if (
+            body.get("entry", [{}])[0]
+            .get("changes", [{}])[0]
+            .get("value", {})
+            .get("statuses")
+        ):
+            print("Received a WhatsApp status update.")
+            return {"status": "ok"}
+
+        if is_valid_whatsapp_message(body):
+            await process_whatsapp_message(body, db)
+            return {"status": "ok"}
+        else:
+            # if the request is not a WhatsApp API event, return an error
+            raise HTTPException(
+                status_code=404,
+                detail="Not a WhatsApp API event"
+            )
+
+    except json.JSONDecodeError:
+        raise HTTPException(status_code=400, detail="Invalid JSON")
+    except Exception as e:
+        print(f"Error in webhook: {e}")
+        raise HTTPException(status_code=500, detail="Internal server error")
+
 
 if __name__ == "__main__":
     import uvicorn
